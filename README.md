@@ -57,7 +57,7 @@ python scripts/snap_learn.py --image "D:/path/to/your/image.jpg"
 
 - First run can be slow because some models are loaded/downloaded.
 - If CUDA is not available, the app runs on CPU.
-- RAM++ is not part of this runtime flow.
+
 
 ## Optional API Run
 
