@@ -1,132 +1,87 @@
-# SnapTalk AI Integration Starter
+# SnapTalk
 
-This repository is a complete starter for cross-team integration of the SnapTalk AI pipeline.
+SnapTalk is an interactive language-learning pipeline that turns objects from an image into multilingual flashcards with speech and pronunciation feedback.
 
-## What this includes
+## Main capabilities
 
-- End-to-end API contracts for:
-  - Vision detection + polygons
-  - Translation + flashcard generation
-  - TTS routing
-  - Pronunciation scoring
-- Runnable FastAPI backend skeleton with service wrappers
-- Docker and compose setup
-- Team handoff documentation for AI, Backend, and Frontend
+- Detect objects from an image
+- Label each object with a local VLM flow
+- Translate labels into a target language
+- Generate text-to-speech audio
+- Run pronunciation scoring with per-phoneme feedback
 
-## Why this exists
+## Active runtime flow
 
-The project has one month remaining. The fastest safe strategy is contract-first integration:
+When you run scripts/snap_learn.py, the pipeline is:
 
-1. Freeze payload shape (not model internals)
-2. Build against fixed contracts in parallel
-3. Keep one stable API while improving model internals safely
+1. LDET detection using yolov8m.pt
+2. Qwen2-VL object labeling
+3. MobileSAM segmentation using mobile_sam.pt
+4. Flashcard generation from translation memory and fallback translators
+5. Edge-TTS audio output
+6. Optional pronunciation assessment loop
 
-## Quick start
+## Requirements
 
-1. Create environment and install deps
+- Python 3.9+
+- Windows, Linux, or macOS
+- Internet on first run for HuggingFace model download
+- Microphone if pronunciation testing is used
 
-```bash
+## Setup
+
+1. Create and activate a virtual environment
+2. Install dependencies from requirements.txt
+3. Keep yolov8m.pt and mobile_sam.pt in the project root
+
+Windows PowerShell:
+
 python -m venv .venv
-.venv\\Scripts\\activate
+.venv\\Scripts\\Activate.ps1
 pip install -r requirements.txt
-```
 
-2. Run API
+## Run the interactive app
 
-```bash
-uvicorn app.main:app --reload --port 8000
-```
+python scripts/snap_learn.py --image "D:/path/to/your/image.jpg"
 
-3. Open docs
+You can also run with one of your local test images.
 
-- http://127.0.0.1:8000/docs
+## Optional API mode
 
-## Which pipeline is used right now?
+Start the API server:
 
-For the command below, the project uses the **Hybrid VLM pipeline**:
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 
-```bash
-python scripts/snap_learn.py --image "test1.jpeg"
-```
+Health check:
 
-Execution path used by this script:
+GET /health
 
-1. Detection: **LDET (YOLOv8m, class-agnostic)**
-2. Recognition/labeling: **Qwen2-VL-2B-Instruct** (local)
-3. Segmentation: **MobileSAM** (when `SEGMENTATION=mobilesam`)
-4. Translation: **DeepL first**, then Google/Microsoft/LLM fallbacks
-5. TTS: **Piper first**, then **Edge-TTS** fallback if Piper voice fails
+Main endpoints include:
 
-This is implemented in `scripts/snap_learn.py`, which calls `run_snap_learn_vlm` from `app/services/vlm_experiment/snap_learn_vlm.py`.
+- POST /v1/pipeline/snap-learn
+- POST /v1/pipeline/snap-learn-vlm
+- POST /v1/translation/flashcard
+- POST /v1/speech/tts
+- POST /v1/speech/pronunciation
 
-Important: the API serves both paths at the same time. The active path depends on which endpoint/script you call.
+## Runtime outputs
 
-- Classic path endpoint: `POST /v1/pipeline/snap-learn`
-- Hybrid VLM endpoint: `POST /v1/pipeline/snap-learn-vlm`
+- data/audio stores generated and pronunciation audio
+- data/artifacts stores detection and segmentation artifacts
+- data/translation_memory.db stores translation memory
 
-## Project structure
+## Environment notes
 
-- app/: API, schemas, routers, service wrappers
-- docs/: contracts and handoff guides
-  - docs/ACTIVE_PIPELINE_CURRENT.md: exact active runtime pipeline and phase-by-phase breakdown
+- .env is optional but recommended for API keys and tuning
+- If no premium translation key is provided, fallback translators are used
 
-## Important notes
+## Troubleshooting
 
-- This starter intentionally avoids hard-coding model weights.
-- Real weights should be mounted from external storage and referenced by config.
-- Production model formats should be ONNX/TensorRT/PyTorch wrappers, not .h5 for this stack.
+- If model loading is slow on first run, wait for initial download completion
+- If CUDA is unavailable, the pipeline falls back to CPU
+- If audio playback fails, confirm OS audio device configuration
+- If microphone capture fails, confirm device permissions and input selection
 
-## Vision integration
+## Developer documentation
 
-The public endpoint contract does not change while internals call real model services.
-
-Set these environment variables:
-
-- YOLO_SERVICE_URL
-- MOBILESAM_SERVICE_URL
-- RAMPP_SERVICE_URL
-
-If a dependent model service is down, the API returns deterministic fallback objects and sets `fallback_used=true`.
-
-## Core feature code
-
-- Detection + ranking + segmentation + tagging pipeline: `app/services/vision_pipeline.py`
-- Local ONNX model backend (YOLO-World, MobileSAM, RAM++): `app/services/vision_local.py`
-- Hybrid VLM pipeline (LDET + Qwen2-VL + MobileSAM): `app/services/vlm_experiment/snap_learn_vlm.py`
-- Translation memory + LLM fallback: `app/services/translation_service.py`
-- Text-to-Speech generation and file serving: `app/services/tts_service.py`
-- Pronunciation scoring with remote model hook + Needleman-Wunsch fallback: `app/services/pronunciation_service.py`
-
-To run local models, set `VISION_BACKEND=local_onnx` and place model files in `models/`.
-
-## Daily run commands
-
-Run interactive mobile-like flow (currently Hybrid VLM path):
-
-```bash
-python scripts/snap_learn.py --image "test1.jpeg"
-```
-
-Run full automated tests:
-
-```bash
-python -m pytest -q
-```
-
-Run smoke check with real printed outputs:
-
-```bash
-python scripts/test_full_pipeline.py
-```
-
-Run complete end-to-end pipeline on a real local image:
-
-```bash
-python scripts/snap_learn.py --image "C:/path/to/your/image.jpg"
-```
-
-Run standalone pronunciation lab (fast iteration, no vision pipeline):
-
-```bash
-python scripts/pronunciation_lab.py
-```
+For full architecture and implementation workflow, see DEVELOPER_README.md
