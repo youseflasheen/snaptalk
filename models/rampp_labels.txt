@@ -1,0 +1,10 @@
+apple
+book
+cup
+phone
+laptop
+plant
+bottle
+pen
+notebook
+chair

@@ -1,0 +1,38 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+httpx==0.27.2
+numpy==2.0.2
+Pillow==10.4.0
+opencv-python==4.10.0.84
+onnxruntime==1.19.2
+pytest==8.3.3
+python-multipart==0.0.12
+requests==2.32.3
+# ── Vision models ─────────────────────────────────────────────────────────────
+# ultralytics: YOLO-World (open-vocab detection) + MobileSAM (segmentation)
+#   Downloads yolov8s-worldv2.pt (~28 MB) and mobile_sam.pt (~40 MB) on first use.
+ultralytics>=8.3.0
+# recognize-anything: RAM++ fine-grained semantic tagger (4500+ categories)
+#   NOT on PyPI — install from GitHub:
+#     pip install git+https://github.com/xinyu1205/recognize-anything.git
+#   Downloads ram_plus_plus_swin_large_14m.pth (~1.4 GB) from HuggingFace Hub on first use.
+#   CPU inference: ~5–15 s per crop (intended for GPU in production).
+# recognize-anything>=1.0.0   ← removed: not on PyPI, see install note above
+transformers>=4.15.0
+huggingface_hub
+timm
+fairscale
+# ── Translation + TTS ─────────────────────────────────────────────────────────
+deep-translator>=1.11.4
+google-cloud-translate>=3.15.5
+# Edge-TTS: Microsoft cloud synthesis (excellent quality, requires internet)
+edge-tts>=6.1.0
+# Standalone pronunciation lab (microphone capture + phoneme extraction)
+sounddevice>=0.4.7
+epitran>=1.24
+g2p-en>=2.1.0
+# Python 3.9 compatibility pin: newer panphon uses Python 3.10+ union syntax at import time.
+panphon==0.20.0
