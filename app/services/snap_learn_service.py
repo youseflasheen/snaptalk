@@ -36,7 +36,7 @@ import numpy as np
 from app.core.config import settings
 from app.schemas.pipeline import SnapLearnObject, SnapLearnResponse
 from app.schemas.translation import FlashcardRequest
-from app.services.translation_service import build_flashcard
+from app.services.translation.service import build_flashcard
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Lazy-loaded model singletons

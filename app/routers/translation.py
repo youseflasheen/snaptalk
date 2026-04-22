@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.schemas.translation import FlashcardRequest, FlashcardResponse
-from app.services.translation_service import build_flashcard
+from app.services.translation.service import build_flashcard
 
 router = APIRouter()
 

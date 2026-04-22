@@ -240,7 +240,7 @@ def detect_objects(image_bytes: bytes, max_objects: int = 10):
     print("  ⏳ Running LDET detection + Qwen2-VL labeling...")
     print("     (This may take 30-60 seconds on first run)")
     
-    from app.services.vlm_experiment.snap_learn_vlm import run_snap_learn_vlm
+    from app.services.detection.snap_learn_vlm import run_snap_learn_vlm
     
     # Run detection without translation (we'll do that after user selects)
     # Using a placeholder language since we won't use the translation yet
@@ -387,7 +387,7 @@ def translate_label_to_native(source_word: str, native_lang: str) -> str:
 
     try:
         from app.schemas.translation import FlashcardRequest
-        from app.services.translation_service import build_flashcard
+        from app.services.translation.service import build_flashcard
 
         flashcard = build_flashcard(
             FlashcardRequest(
@@ -425,7 +425,7 @@ def translate_object(source_word: str, target_lang: str):
     print(f"\n  {_ui('Target word')}: '{source_word}' -> {lang_name}")
     
     from app.schemas.translation import FlashcardRequest
-    from app.services.translation_service import build_flashcard, TranslationError
+    from app.services.translation.service import build_flashcard, TranslationError
     
     max_retries = 3
     for attempt in range(max_retries):
@@ -499,7 +499,7 @@ def generate_audio(text: str, lang_code: str):
     print(f"\n  Generating speech for target word '{text}'...")
     
     from app.schemas.speech import TTSRequest
-    from app.services.tts_service import synthesize
+    from app.services.tts.service import synthesize
     
     tts_result = synthesize(TTSRequest(
         text=text,
@@ -528,7 +528,7 @@ def _tokenize_ipa_text(ipa_text: str) -> list[str]:
         return []
 
     try:
-        from scripts import pronunciation_lab as pron_lab
+        from app.services.pronunciation import pronunciation_lab as pron_lab
 
         tokens = pron_lab._tokenize_ipa(cleaned.replace(".", " "))
         if tokens:
@@ -558,7 +558,7 @@ def _ipa_looks_weak(ipa: str, translated_word: str) -> bool:
 
 def _extract_pronunciation_module_phonemes(word: str, lang_code: str) -> tuple[list[str], str]:
     try:
-        from scripts import pronunciation_lab as pron_lab
+        from app.services.pronunciation import pronunciation_lab as pron_lab
 
         return pron_lab._auto_extract_reference_phonemes(word, lang_code)
     except Exception as exc:
@@ -649,8 +649,8 @@ def _ensure_pronunciation_runtime() -> None:
     if _PRONUNCIATION_READY:
         return
 
-    from app.services.pronunciation_service import warmup_local_pronunciation_models
-    from scripts import pronunciation_lab as pron_lab
+    from app.services.pronunciation.service import warmup_local_pronunciation_models
+    from app.services.pronunciation import pronunciation_lab as pron_lab
 
     print_section("🗣️ STEP 5A: Preparing Pronunciation Runtime")
     runtime_message = pron_lab._configure_runtime_gpu_preferred()
@@ -673,7 +673,7 @@ def run_pronunciation_assessment(
     """Run pronunciation assessment loop until green or user exits."""
     _ensure_pronunciation_runtime()
 
-    from scripts import pronunciation_lab as pron_lab
+    from app.services.pronunciation import pronunciation_lab as pron_lab
 
     print_section("🗣️ STEP 5B: Pronunciation Assessment")
     print(f"\n  {_ui('Target word')}: {target_word}")

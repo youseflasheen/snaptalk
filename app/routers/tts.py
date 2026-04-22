@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.schemas.speech import TTSRequest, TTSResponse
-from app.services.tts_service import synthesize
+from app.services.tts.service import synthesize
 
 router = APIRouter()
 

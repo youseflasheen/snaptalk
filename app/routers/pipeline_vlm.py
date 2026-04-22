@@ -5,7 +5,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.core.config import settings
 from app.schemas.pipeline import SnapLearnResponse
-from app.services.vlm_experiment.snap_learn_vlm import run_snap_learn_vlm
+from app.services.detection.snap_learn_vlm import run_snap_learn_vlm
 
 router = APIRouter(prefix="/v1/pipeline", tags=["pipeline-vlm"])
 logger = logging.getLogger(__name__)

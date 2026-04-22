@@ -28,22 +28,19 @@ import numpy as np
 
 from app.schemas.pipeline import SnapLearnObject, SnapLearnResponse
 from app.schemas.translation import FlashcardRequest
-from app.services.translation_service import build_flashcard
-from app.services.vlm_experiment.vlm_providers import (
+from app.services.translation.service import build_flashcard
+from app.services.recognition.vlm_providers import (
     OpenAIGPT4VProvider,
     Qwen2VLProvider,
     VLMProvider,
 )
 
-# Import detection, segmentation, and utilities from original pipeline
-from app.services.snap_learn_service import (
-    _bbox_polygon,
-    _encode_masked_png_base64,
-    _extract_masked_crop,
-    _get_sam,
-    _save_artifacts,
-    _segment_with_sam,
-    _simplify_polygon,
+from app.services.segmentation.service import (
+    bbox_polygon as _bbox_polygon,
+    encode_masked_png_base64 as _encode_masked_png_base64,
+    extract_masked_crop as _extract_masked_crop,
+    save_artifacts as _save_artifacts,
+    segment_with_sam as _segment_with_sam,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────

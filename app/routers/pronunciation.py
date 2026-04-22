@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.schemas.speech import PronunciationRequest, PronunciationResponse
-from app.services.pronunciation_service import score_pronunciation
+from app.services.pronunciation.service import score_pronunciation
 
 router = APIRouter()
 
