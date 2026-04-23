@@ -1,24 +1,34 @@
 # SnapTalk
 
-SnapTalk is an image-to-language learning app.
-You give it an image, choose a target language, and it returns a learning card with:
+SnapTalk is an interactive multimodal language-learning pipeline: upload an image, detect and segment real objects, translate target vocabulary, synthesize pronunciation audio, and optionally evaluate learner pronunciation with per-phoneme feedback.
 
-- object name
-- translation
-- phonetic guide
-- example sentence
-- spoken audio
-- optional pronunciation score
+## Overview
 
-## Quick Start
+The active runtime flow is:
 
-Requirements:
+1. Object detection (LDET via YOLOv8m class-agnostic mode)
+2. Object naming (Qwen2-VL or OpenAI GPT-4V provider)
+3. Object segmentation (MobileSAM or bbox fallback)
+4. Flashcard generation (translation + IPA + example sentence)
+5. TTS generation (Edge-TTS with offline silence fallback)
+6. Optional pronunciation scoring (remote/local/simulation)
+
+The project supports:
+
+- Interactive CLI learning flow via scripts/snap_learn.py
+- Standalone pronunciation lab via scripts/pronunciation_lab.py
+- FastAPI endpoints for pipeline, translation, TTS, and pronunciation
+
+## Environment Setup
+
+### Requirements
 
 - Python 3.9+
-- yolov8m.pt in the project root
-- mobile_sam.pt in the project root
+- Model files in repository root:
+  - yolov8m.pt
+  - mobile_sam.pt
 
-Windows PowerShell setup:
+### Install
 
 ```powershell
 python -m venv .venv
@@ -26,43 +36,148 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Run:
+### Optional .env configuration
 
-```powershell
-python scripts/snap_learn.py --image "D:/path/to/your/image.jpg"
+Create .env in repository root to override defaults from app/core/config.py:
+
+```env
+APP_NAME=SnapTalk AI Service
+HOST=0.0.0.0
+PORT=8000
+
+# Translation
+DEEPL_API_KEY=
+GOOGLE_CLOUD_PROJECT_ID=
+GOOGLE_CLOUD_CREDENTIALS_PATH=
+TRANSLATION_GOOGLE_MODE=official_with_fallback
+
+# LLM / Ollama
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_API_KEY=ollama
+TRANSLATION_DEFAULT_MODEL=llama3.2:3b
+
+# Pronunciation
+PRONUNCIATION_MODE=hybrid
+PRONUNCIATION_LOCAL_ENABLED=false
+PRONUNCIATION_MODEL_DEVICE=cpu
 ```
 
-## What The Project Does (A to Z)
+## Code Structure
 
-1. You provide an image.
-2. The app detects objects in the image with YOLO (LDET-style detection).
-3. For each detected object, Qwen2-VL assigns a human-readable label.
-4. MobileSAM segments the object area for clean object extraction.
-5. You pick your native language and target learning language.
-6. The selected object is translated into the target language.
-7. The app builds a flashcard with:
-	- translated word
-	- phonetic form
-	- example sentence
-8. Text-to-speech generates audio for the target word.
-9. If you choose pronunciation testing:
-	- the app records your voice
-	- compares your pronunciation with reference phonemes
-	- returns per-phoneme feedback and an overall level
-10. Results are saved as runtime outputs:
-	- audio files in data/audio
-	- image artifacts in data/artifacts
+```text
+snaptalk/
+|- app/
+|  |- main.py
+|  |- core/
+|  |  |- config.py
+|  |- routers/
+|  |  |- pipeline_vlm.py
+|  |  |- pronunciation.py
+|  |  |- translation.py
+|  |  |- tts.py
+|  |- schemas/
+|  |  |- pipeline.py
+|  |  |- speech.py
+|  |  |- translation.py
+|  |  |- vision.py
+|  |- services/
+|  |  |- detection/
+|  |  |  |- snap_learn_vlm.py
+|  |  |- segmentation/
+|  |  |  |- service.py
+|  |  |- recognition/
+|  |  |  |- vlm_providers/
+|  |  |  |  |- base.py
+|  |  |  |  |- openai_gpt4v.py
+|  |  |  |  |- qwen2vl.py
+|  |  |- translation/
+|  |  |  |- service.py
+|  |  |- tts/
+|  |  |  |- service.py
+|  |  |- pronunciation/
+|  |  |  |- pronunciation_lab.py
+|  |  |  |- service.py
+|  |- utils/
+|     |- network_security.py
+|- scripts/
+|  |- snap_learn.py
+|  |- pronunciation_lab.py
+|- docs/
+|  |- RUNTIME_VERIFICATION.md
+|- tests/
+|- data/
+|  |- seed_translations.json
+|  |- yolo_world_vocab.txt
+|- ARCHITECTURE_TREE.md
+|- requirements.txt
+```
 
-## Notes
+## API Endpoints
 
-- First run can be slow because some models are loaded/downloaded.
-- If CUDA is not available, the app runs on CPU.
+Mounted active endpoints:
 
+- GET /health
+- POST /v1/pipeline/snap-learn-vlm
+- POST /v1/translation/flashcard
+- POST /v1/speech/tts
+- POST /v1/speech/pronunciation
 
-## Optional API Run
+## Quick Start
 
-If you want HTTP endpoints:
+### Run interactive Snap & Learn CLI
+
+```powershell
+python scripts/snap_learn.py --image "D:/path/to/image.jpg"
+```
+
+### Run standalone pronunciation lab
+
+```powershell
+python scripts/pronunciation_lab.py
+```
+
+### Run FastAPI server
 
 ```powershell
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
+
+Then open:
+
+- http://127.0.0.1:8000/docs
+- http://127.0.0.1:8000/redoc
+
+## Testing
+
+Run all tests:
+
+```powershell
+pytest -q
+```
+
+Run selected suites:
+
+```powershell
+pytest tests/test_api.py -q
+pytest tests/test_snap_learn_flow.py -q
+```
+
+## Runtime Verification
+
+See docs/RUNTIME_VERIFICATION.md for:
+
+- Active route topology
+- Latency benchmarks
+- Legacy endpoint non-exposure checks
+- Translation runtime configuration checks
+- Credential presence checks
+
+## Notes
+
+- First run may be slower due to model loading and cache warm-up.
+- CPU mode is supported; CUDA improves VLM and pronunciation speed.
+- Audio outputs are served from /static/audio and persisted under data/audio.
+
+## Acknowledgement
+
+SnapTalk combines detection, segmentation, translation, TTS, and pronunciation systems through a modular service architecture designed for practical language-learning workflows.

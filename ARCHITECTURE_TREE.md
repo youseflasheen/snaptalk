@@ -54,18 +54,6 @@ snaptalk/
   requirements.txt
   README.md
 
-## Obsolete or Legacy Files
-
-snaptalk/
-  app/
-    routers/
-      pipeline.py          # classic RAM++ path, not used by current active pipeline
-      vision.py            # separate service-oriented legacy flow
-    services/
-      snap_learn_service.py # classic YOLO-World + RAM++ flow
-      vision_pipeline.py    # legacy vision orchestration path
-      vision_local.py       # legacy local ONNX vision path
-
 ## Removed as Obsolete in this cleanup
 
 snaptalk/
@@ -74,3 +62,9 @@ snaptalk/
       translation_service.py  # replaced by app/services/translation/service.py
       tts_service.py          # replaced by app/services/tts/service.py
       vlm_experiment/
+      snap_learn_service.py
+      vision_pipeline.py
+      vision_local.py
+    routers/
+      pipeline.py
+      vision.py

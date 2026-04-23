@@ -14,16 +14,6 @@ class Settings(BaseSettings):
     allow_private_network_urls: bool = False
     allowed_external_hosts: str = ""
 
-    vision_model_version: str = "vision_v1"
-    vision_backend: str = "http"
-    vision_timeout_seconds: float = 8.0
-    yolo_service_url: str = "http://localhost:8101/detect"
-    mobilesam_service_url: str = "http://localhost:8102/segment"
-    rampp_service_url: str = "http://localhost:8103/tag"
-    yolo_onnx_path: str = "./models/yolo_world.onnx"
-    mobilesam_onnx_path: str = "./models/mobilesam.onnx"
-    rampp_onnx_path: str = "./models/rampp.onnx"
-    rampp_labels_path: str = "./models/rampp_labels.txt"
     yolo_world_vocab_path: str = "./data/yolo_world_vocab.txt"
 
     # DeepL Translation API
