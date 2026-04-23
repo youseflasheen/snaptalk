@@ -1,402 +1,223 @@
-# SnapTalk Defense Master Breakdown (Evidence-Strict)
+# SnapTalk Defense Master Breakdown (Latest, Evidence-Strict)
 
 ## 1) Scope and Method
 
-This document is built only from the current repository state.
+This document is aligned with the current repository state after the modular refactor.
 
-Evidence sources used:
-- Runtime entry and API wiring: app/main.py
-- Active CLI pipeline: scripts/snap_learn.py
-- Active modular services under app/services/detection, segmentation, recognition, translation, tts, pronunciation
-- Legacy/obsolete tracks still present in repo
-- Tests in tests/test_api.py and tests/test_snap_learn_flow.py
-- Runtime configuration from app/core/config.py and .env
+Evidence sources:
+- Runtime entry and route wiring: app/main.py
+- Active API routers: app/routers/pipeline_vlm.py, app/routers/translation.py, app/routers/tts.py, app/routers/pronunciation.py
+- Active modular services: app/services/detection, segmentation, recognition, translation, tts, pronunciation
+- Interactive flow: scripts/snap_learn.py
+- Runtime checks: docs/RUNTIME_VERIFICATION.md
+- Tests: tests/test_api.py, tests/test_snap_learn_flow.py
+- Configuration: app/core/config.py
 
-Rules followed in this report:
-- No assumptions presented as facts.
-- Every architecture statement is tied to concrete implementation files.
-- Any non-proven rationale is marked explicitly as Unknown/Not documented.
+Rules:
+- No assumptions are presented as facts.
+- Legacy references are excluded unless still present in runtime behavior.
 
 ## 2) Current Runtime Entry Points
 
 ### 2.1 FastAPI Runtime
 
-Main API app and mounted routes:
-- FastAPI app construction: app/main.py line 14
-- Static audio mount: app/main.py line 17
-- Health endpoint: app/main.py line 20
-- Routers included:
-  - app/main.py line 25 (vision)
-  - app/main.py line 26 (classic pipeline)
-  - app/main.py line 27 (vlm pipeline)
-  - app/main.py line 28 (translation)
-  - app/main.py line 29 (tts)
-  - app/main.py line 30 (pronunciation)
+Main app behavior in app/main.py:
+- Creates FastAPI app and static audio mount.
+- Exposes health endpoint.
+- Includes only active routers:
+  - pipeline_vlm_router
+  - translation_router
+  - tts_router
+  - pronunciation_router
 
-Public route declarations:
-- /v1/pipeline/snap-learn-vlm: app/routers/pipeline_vlm.py line 14
-- /v1/pipeline/snap-learn: app/routers/pipeline.py line 13
-- /v1/vision/detect: app/routers/vision.py line 11
-- /v1/translation/flashcard: app/routers/translation.py line 9
-- /v1/speech/tts: app/routers/tts.py line 9
-- /v1/speech/pronunciation: app/routers/pronunciation.py line 9
+Mounted active endpoints (also verified in docs/RUNTIME_VERIFICATION.md):
+- GET /health
+- POST /v1/pipeline/snap-learn-vlm
+- POST /v1/translation/flashcard
+- POST /v1/speech/tts
+- POST /v1/speech/pronunciation
 
-### 2.2 Interactive CLI Runtime (Primary Learning Flow)
+### 2.2 Interactive CLI Runtime
 
-Primary terminal flow entry:
-- main function: scripts/snap_learn.py line 794
+Primary flow entry:
+- scripts/snap_learn.py -> main()
 
-Core staged methods in same script:
-- Detection call wrapper: scripts/snap_learn.py line 237
-- Translation stage: scripts/snap_learn.py line 412
-- TTS stage: scripts/snap_learn.py line 495
-- Pronunciation stage: scripts/snap_learn.py line 668
-- Detection backend call to VLM pipeline: scripts/snap_learn.py line 247
+Key stages in CLI flow:
+- Object detection via VLM pipeline service
+- Translation flashcard generation
+- TTS playback generation
+- Optional pronunciation assessment loop
 
 ## 3) Active Modular Pipeline (Detection -> Recognition -> Segmentation -> Translation -> TTS -> Pronunciation)
 
-## 3.1 Detection Stage (Active)
+### 3.1 Detection (Active)
 
-File: app/services/detection/snap_learn_vlm.py
-
-Confirmed implementation facts:
-- LDET proxy model load is YOLO with local weight yolov8m.pt:
-  - app/services/detection/snap_learn_vlm.py line 61
-- Main orchestration function:
-  - app/services/detection/snap_learn_vlm.py line 188
-- Segmentation mode is environment-driven:
-  - app/services/detection/snap_learn_vlm.py line 223
-- Per-object recognition uses VLM identify_object on crops:
-  - app/services/detection/snap_learn_vlm.py line 241
-
-Operational sequence in this file:
-1. Decode image.
-2. Detect boxes by LDET/YOLOv8m.
-3. Select VLM provider by environment.
-4. Label each crop with VLM.
-5. Segment each object by MobileSAM or fallback bbox.
-6. Build translation flashcards per object (unless target language is en).
-7. Return SnapLearnResponse.
-
-## 3.2 Recognition Stage (Active)
-
-### Qwen2-VL provider
-
-File: app/services/recognition/vlm_providers/qwen2vl.py
-
-Evidence:
-- Default model id: Qwen/Qwen2-VL-2B-Instruct
-  - line 89, line 124
-- Explicit 7B rejection guard exists:
-  - line 132, line 135
-- Main recognition interfaces:
-  - detect_objects: line 139
-  - identify_object: line 321
-  - estimate_cost: line 394
-
-### OpenAI GPT-4o provider (alternate)
-
-File: app/services/recognition/vlm_providers/openai_gpt4v.py
-
-Evidence:
-- Provider class exists: line 17
-- Default model set to gpt-4o: line 25
-- Function-call based detection request includes detect_objects function call:
-  - line 134
-
-Provider selection in detection orchestrator:
-- app/services/detection/snap_learn_vlm.py line 155 returns Qwen2VLProvider for default qwen2vl path.
-- openai path requires OPENAI_API_KEY and selects OpenAIGPT4VProvider.
-
-## 3.3 Segmentation Stage (Active)
-
-File: app/services/segmentation/service.py
-
-Evidence:
-- MobileSAM load uses mobile_sam.pt: line 33
-- Segmentation method: line 51
-- Masked crop extraction method: line 72
-- PNG base64 encoding with payload bounds: line 98
-- Artifact saving: line 133
-
-Behavioral facts:
-- Segmentation can fall back to bbox polygon when SAM fails.
-- Encoded masked crop is constrained by max dimension and max PNG byte size settings.
-- Overlay and object artifacts are written under data/artifacts.
-
-## 3.4 Translation Stage (Active)
-
-File: app/services/translation/service.py
-
-Evidence:
-- Main user-facing builder: build_flashcard at line 997
-- Fallback chain function: _fetch_translation at line 876
-- Chain order is documented in function docstring:
-  - DeepL -> Google Cloud -> Google (deep-translator) -> MyMemory -> Ollama
-  - line 884
-- Engine methods:
-  - DeepL: line 718
-  - Google Cloud official: line 624
-  - Google deep-translator: line 683
-  - MyMemory: line 766
-  - Ollama: line 800
-
-Important robustness logic in this module:
-- Translation cache in SQLite with read/repair path.
-- Quality filters reject low-quality/refusal/placeholder outputs.
-- Known-term coercion map exists for critical words such as hoodie.
-- IPA fallback and refinement are implemented.
-
-## 3.5 TTS Stage (Active)
-
-File: app/services/tts/service.py
-
-Evidence:
-- Voice map includes multilingual Edge voices: line 15
-- Edge synthesis function: line 35
-- Engine selection starts as edge: line 118
-- Fallback to silence on synthesis failure: line 123
-- Public synthesize entrypoint: line 104
-
-Operational facts:
-- TTS writes WAV to configured output directory.
-- Cleanup logic keeps bounded number of generated files.
-- Output returns audio URL via static mount base.
-
-## 3.6 Pronunciation Stage (Active)
-
-Primary scorer file: app/services/pronunciation/service.py
-
-Evidence:
-- Main route function: score_pronunciation at line 520
-- In-memory scoring variant: line 536
-- Warmup function for local models: line 551
-- Whisper ASR pipeline loading (automatic-speech-recognition): line 276
-- Wav2Vec CTC classes imported: line 303
-- Wav2Vec model and processor loaded from settings: line 305, 306
-- Overall-level gating logic: _resolve_overall_level line 41
-
-Pronunciation lab helper:
-- app/services/pronunciation/pronunciation_lab.py
-
-Evidence:
-- Auto phoneme extraction method: line 565
-- Epitran instance loader: line 194
-- English G2P via g2p_en import: line 492
-- Runtime GPU preference function: line 814
-
-Mode behavior:
-- Remote/local/hybrid/simulation pathway is controlled by settings.pronunciation_mode and settings.pronunciation_local_enabled.
-- If remote/local fail or unavailable, simulation fallback is present.
-
-## 4) Model Inventory and Proven Configuration
-
-This section lists only models and engines that are explicitly referenced in code.
-
-### 4.1 Detection and Segmentation
-
-1. YOLOv8m local detector
-- Evidence: app/services/detection/snap_learn_vlm.py line 61
-- Weight expected in project root as yolov8m.pt (README requirement also states this).
-
-2. MobileSAM local segmenter
-- Evidence: app/services/segmentation/service.py line 33
-- Weight expected in project root as mobile_sam.pt.
-
-### 4.2 Recognition Models
-
-1. Qwen2-VL-2B-Instruct
-- Evidence: app/services/recognition/vlm_providers/qwen2vl.py line 89 and line 124
-- 7B variant actively guarded against in this implementation.
-
-2. OpenAI GPT-4o (alternate cloud provider)
-- Evidence: app/services/recognition/vlm_providers/openai_gpt4v.py line 25
-- Activated only when provider selection resolves to openai and API key exists.
-
-### 4.3 Translation Engines
-
-1. DeepL API
-- Evidence: app/services/translation/service.py line 718
-
-2. Google Cloud Translation API (official client)
-- Evidence: app/services/translation/service.py line 624
-
-3. deep-translator Google wrapper
-- Evidence: app/services/translation/service.py line 683
-
-4. deep-translator MyMemory wrapper
-- Evidence: app/services/translation/service.py line 766
-
-5. Ollama chat-completions fallback for translation/example/ipa
-- Evidence: app/services/translation/service.py line 800
-- Default translation LLM model configured in settings is llama3.2:3b.
-  - app/core/config.py line 37
-
-### 4.4 TTS Engines
-
-1. Edge-TTS cloud
-- Evidence: app/services/tts/service.py line 35 and line 118
-
-2. Silence fallback WAV generator
-- Evidence: app/services/tts/service.py line 123
-
-### 4.5 Pronunciation Models
-
-1. Whisper model (default openai/whisper-tiny)
-- Settings evidence: app/core/config.py line 54
-- Runtime load evidence: app/services/pronunciation/service.py line 276
-
-2. Wav2Vec2 model (default facebook/wav2vec2-base-960h)
-- Settings evidence: app/core/config.py line 55
-- Runtime load evidence: app/services/pronunciation/service.py line 305 and line 306
-
-### 4.6 Legacy Pipeline Models Still in Repository
-
-File: app/services/snap_learn_service.py
-
-Evidence in legacy service:
-- YOLO-World model load yolov8s-worldv2.pt: line 65
-- MobileSAM load mobile_sam.pt: line 88
-- RAM++ model initialization via ram_plus: line 114
-- Main classic runner run_snap_learn: line 466
-
-Status note:
-- This file is marked as obsolete/legacy in ARCHITECTURE_TREE.md and not part of the active modular VLM pipeline route.
-
-## 5) Configuration Surface and Active Defaults
-
-File: app/core/config.py
-
-Critical settings and defaults:
-- vision_backend default http: line 18
-- microservice URLs:
-  - yolo: line 20
-  - mobilesam: line 21
-  - rampp: line 22
-- detector default ldet: line 33
-- segmentation default mobilesam: line 34
-- translation_default_model llama3.2:3b: line 37
-- translation_google_mode official_with_fallback: line 39
-- tts_primary_engine edge: line 45
-- pronunciation_mode hybrid: line 52
-- pronunciation models and device:
-  - whisper: line 54
-  - wav2vec: line 55
-  - device cpu: line 56
-
-Environment file observed:
-- .env line 9 sets DETECTOR=ldet
-- .env line 10 sets SEGMENTATION=mobilesam
-- .env line 13 sets OLLAMA_BASE_URL
-- .env line 16 sets TRANSLATION_GOOGLE_MODE=deep_translator_only
-
-Interpretation from code behavior:
-- .env values override config defaults through pydantic settings loader.
-- Therefore current runtime translation_google_mode is expected to be deep_translator_only unless process environment changes it.
-
-## 6) Security and Reliability Controls (Implemented)
-
-File: app/utils/network_security.py
-
-Evidence:
-- URL validation entry: line 30
-- Blocked IP classes helper: line 19
-- Size-bounded download helper: line 65
-- Redirect final URL is re-validated.
-
-Protected behaviors confirmed by tests:
-- Legacy route decommissioning tested (404 for removed endpoints):
-  - tests/test_api.py line 22
-- Oversized upload rejection tested:
-  - tests/test_api.py line 34
-- Health endpoint omits environment leakage tested:
-  - tests/test_api.py line 14
-
-## 7) Test Evidence Map
-
-API tests:
-- Health contract: tests/test_api.py line 14
-- Legacy endpoints not exposed: tests/test_api.py line 22
-- VLM upload limit: tests/test_api.py line 34
-- Translation cache roundtrip: tests/test_api.py line 66
-- TTS file generation: tests/test_api.py line 112
-- Pronunciation response shape: tests/test_api.py line 134
-
-Interactive flow test:
-- Same-object multi-language loop behavior:
-  - tests/test_snap_learn_flow.py line 8
-
-Interpretation:
-- There is concrete automated coverage for core API contracts and specific flow mechanics.
-- End-to-end quality of external model outputs still depends on runtime dependencies and network/provider availability.
-
-## 8) Active vs Legacy Architecture (Strict Classification)
-
-### Active (modular path)
-
-Primary active files:
-- scripts/snap_learn.py
+File:
 - app/services/detection/snap_learn_vlm.py
+
+Confirmed behavior:
+- Loads LDET proxy detector using YOLO with yolov8m.pt.
+- Runs class-agnostic detection and duplicate suppression.
+- Orchestrates downstream labeling, segmentation, and flashcard enrichment.
+- Returns SnapLearnResponse.
+
+### 3.2 Recognition (Active)
+
+Provider package:
+- app/services/recognition/vlm_providers/
+
+Implemented providers:
+- qwen2vl.py (default path)
+- openai_gpt4v.py (alternate path requiring OPENAI_API_KEY)
+
+Selection behavior:
+- Provider is selected by environment variable VLM_PROVIDER.
+
+### 3.3 Segmentation (Active)
+
+File:
 - app/services/segmentation/service.py
-- app/services/recognition/vlm_providers/qwen2vl.py
-- app/services/recognition/vlm_providers/openai_gpt4v.py
+
+Confirmed behavior:
+- Loads MobileSAM using mobile_sam.pt.
+- Segments polygons from bounding boxes.
+- Falls back to bbox polygon on failure.
+- Produces transparent crops and constrained base64 PNG payloads.
+- Saves artifact overlays to data/artifacts.
+
+### 3.4 Translation (Active)
+
+File:
 - app/services/translation/service.py
+
+Confirmed behavior:
+- Public entrypoint: build_flashcard.
+- Uses SQLite translation memory cache.
+- Fallback chain: DeepL -> Google Cloud -> Google (deep-translator) -> MyMemory -> Ollama.
+- Includes quality guards, known-term coercion, and IPA fallback/refinement.
+
+### 3.5 TTS (Active)
+
+File:
 - app/services/tts/service.py
+
+Confirmed behavior:
+- Primary engine: Edge-TTS.
+- Failure fallback: generated silence WAV.
+- Bounded cleanup of old audio files.
+- Returns public audio URL compatible with mounted static route.
+
+### 3.6 Pronunciation (Active)
+
+Files:
 - app/services/pronunciation/service.py
 - app/services/pronunciation/pronunciation_lab.py
 
-### Legacy/Obsolete Removal Status
+Confirmed behavior:
+- API scoring entrypoint: score_pronunciation.
+- Local path supports Whisper + Wav2Vec components.
+- Supports hybrid/local/remote/simulation modes via configuration.
+- Includes per-phoneme alignment and overall level gating logic.
 
-Removed from active runtime and deleted from codebase:
-- app/services/snap_learn_service.py
-- app/services/vision_pipeline.py
-- app/services/vision_local.py
-- app/routers/pipeline.py
-- app/routers/vision.py
+## 4) Model and Engine Inventory (Code-Proven)
 
-Evidence source for current active-only runtime:
-- app/main.py no longer includes legacy imports or route mounts.
+Detection and segmentation:
+- yolov8m.pt (YOLO)
+- mobile_sam.pt (MobileSAM)
 
-## 9) Academic Defense Narrative (Phase-by-Phase)
+Recognition:
+- Qwen/Qwen2-VL-2B-Instruct
+- OpenAI GPT-4o (alternate provider path)
 
-### Phase A: Input and Pre-validation
+Translation engines:
+- DeepL
+- Google Cloud Translation API
+- deep-translator Google
+- deep-translator MyMemory
+- Ollama chat-completions fallback
 
-- CLI path reads local image bytes in scripts/snap_learn.py.
-- API routes validate upload constraints and URL safety where relevant.
-- Security utility validates URL scheme/host/IP class before remote fetch.
+TTS:
+- Edge-TTS
+- Silence WAV fallback
 
-### Phase B: Candidate Object Detection
+Pronunciation:
+- Whisper (default openai/whisper-tiny)
+- Wav2Vec2 (default facebook/wav2vec2-base-960h)
 
-- Active path uses YOLOv8m class-agnostic detector in detection/snap_learn_vlm.py.
-- Detections are confidence-ranked and clipped to max_objects.
+## 5) Configuration Surface (Current)
 
-### Phase C: Semantic Recognition
+Primary configuration file:
+- app/core/config.py
 
-- Each detected crop is passed to selected VLM provider identify_object.
-- Default is Qwen2-VL 2B local provider unless environment switches provider.
+Key operational settings include:
+- upload/download limits for image/audio
+- detector and segmentation mode defaults
+- translation model and provider mode
+- TTS output directory and public base URL
+- pronunciation mode, model IDs, thresholds, and device
 
-### Phase D: Segmentation and Object Isolation
+Runtime evidence summary is captured in:
+- docs/RUNTIME_VERIFICATION.md
 
-- MobileSAM segmentation creates polygon masks.
-- Fallback is bbox polygon when segmentation fails.
-- Transparent masked crop can be encoded to base64 with payload limits.
+## 6) Security and Reliability Controls
 
-### Phase E: Translation and Flashcard Build
+Network safety utilities:
+- app/utils/network_security.py
 
-- Translation memory lookup first.
-- Cache miss executes strict fallback chain across providers.
-- Output includes translated word, ipa, example sentence, and source label.
+Implemented safeguards include:
+- blocked private/local address validation for remote fetches
+- bounded byte downloads
+- content-type and scheme checks
 
-### Phase F: Speech Synthesis
+API validations include:
+- image content-type validation
+- max_objects bounds validation
+- upload size limit enforcement
 
-- Edge-TTS generates WAV output.
-- On failure, silence WAV is generated to preserve flow continuity.
+## 7) Test Evidence Map
 
-### Phase G: Pronunciation Assessment
+Core tests:
+- tests/test_api.py
+- tests/test_snap_learn_flow.py
 
-- Optional stage in interactive flow.
-- Hybrid scoring logic can use remote scorer, local Whisper+Wav2Vec, or simulation fallback.
-- Returns overall level plus per-phoneme diagnostics.
+Verified areas include:
+- health endpoint contract
+- removed legacy endpoint non-exposure (404 checks)
+- oversize upload rejection
+- translation cache and output quality guards
+- TTS output generation behavior
+- pronunciation response structure and levels
+- interactive same-object multi-language loop behavior
+
+## 8) Active Architecture Statement
+
+Current architecture is active-modular-only:
+- Detection, recognition, segmentation, translation, TTS, and pronunciation are split into dedicated service packages.
+- Legacy classic pipeline/vision routes are not mounted in runtime.
+- API and CLI both route through the modular service stack.
+
+## 9) Defense Narrative (Phase-by-Phase)
+
+1. Input and validation
+- Request/image input validated for type and size.
+
+2. Object detection
+- Class-agnostic detections produced by YOLOv8m.
+
+3. Semantic labeling
+- Each object crop labeled via configurable VLM provider.
+
+4. Segmentation and isolation
+- MobileSAM polygon segmentation with bbox fallback.
+
+5. Translation flashcard build
+- Cache-first lookup with robust multi-engine fallback.
+
+6. TTS synthesis
+- Edge-TTS generation with fallback continuity path.
+
+7. Pronunciation assessment (optional)
+- Hybrid scoring path with detailed phoneme-level feedback.
 
 ## 10) Runtime Evidence Closure for Prior Gaps
 
@@ -423,29 +244,3 @@ Resolved items:
 Remaining limitation (explicit):
 - Credential presence is validated, but live external-provider connectivity is not guaranteed without networked integration tests.
 
-## 11) Defense-Ready Talking Points (Verifiable)
-
-1. The active modular path is explicitly separated by domain services.
-2. The detection core is local YOLOv8m with class-agnostic strategy.
-3. Object naming is VLM-driven per crop, not detector-label-only.
-4. Segmentation is MobileSAM-first with robust bbox fallback.
-5. Translation is cache-first and multi-provider resilient.
-6. TTS is fail-safe with deterministic silence fallback.
-7. Pronunciation scoring is layered and degrades gracefully.
-8. Security controls include SSRF-aware URL validation and bounded download sizes.
-9. Core contracts are covered by automated tests for health, limits, cache behavior, and pronunciation schema.
-
-## 12) Recommended Defense Order (Concise)
-
-Suggested live explanation order:
-1. Show top-level flow using scripts/snap_learn.py.
-2. Show active detection orchestrator in app/services/detection/snap_learn_vlm.py.
-3. Show segmentation utilities and payload limits.
-4. Show translation fallback chain and cache logic.
-5. Show TTS edge-to-silence fallback.
-6. Show pronunciation hybrid scoring path.
-7. End with tests proving contract-level reliability.
-
-## 13) Final Integrity Statement
-
-This file contains only evidence-backed claims from the repository and clearly labels all unknowns where the code does not provide definitive proof.

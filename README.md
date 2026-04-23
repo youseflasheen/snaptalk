@@ -108,7 +108,6 @@ snaptalk/
 |- data/
 |  |- seed_translations.json
 |  |- yolo_world_vocab.txt
-|- ARCHITECTURE_TREE.md
 |- requirements.txt
 ```
 
