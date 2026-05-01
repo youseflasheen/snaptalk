@@ -1,8 +1,10 @@
 # SnapTalk
 
+
 SnapTalk is an interactive multimodal language-learning pipeline: upload an image, detect and segment real objects, translate target vocabulary, synthesize pronunciation audio, and optionally evaluate learner pronunciation with per-phoneme feedback.
 
 ## Overview
+
 
 The active runtime flow is:
 
